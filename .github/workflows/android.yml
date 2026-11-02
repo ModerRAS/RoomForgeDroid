@@ -13,10 +13,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # setup-android@v3 defaults to the removed SDK package "tools", and
+      # sdkmanager exits 1 with "Failed to find package 'tools'".
       - uses: android-actions/setup-android@v3
-      - name: Android SDK 35
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: 'false'
       - name: Test and assemble
         run: chmod +x ./gradlew && ./gradlew :core:test :app:assembleDebug
