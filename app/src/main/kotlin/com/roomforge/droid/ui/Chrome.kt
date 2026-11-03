@@ -39,6 +39,8 @@ import com.roomforge.core.RtaMode
 import com.roomforge.core.TimeConstant
 import com.roomforge.core.Waveform
 import com.roomforge.core.Weighting
+import com.roomforge.droid.UpdateState
+import com.roomforge.droid.audio.Session
 import kotlin.math.abs
 import kotlin.math.log10
 
@@ -257,6 +259,60 @@ internal fun NoticeDialog(title: String, body: String, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } }
     )
+}
+
+@Composable
+internal fun UpdateDialog(update: UpdateState, session: Session) {
+    when (update) {
+        is UpdateState.Available -> AlertDialog(
+            onDismissRequest = { session.dismissUpdate() },
+            containerColor = Panel,
+            title = { Text("发现新版本 ${update.info.version}", color = Ink) },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(update.info.notes, color = Ink, fontSize = 13.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { session.downloadUpdate() }) { Text("下载") } },
+            dismissButton = { TextButton(onClick = { session.dismissUpdate() }) { Text("稍后") } }
+        )
+        is UpdateState.Downloading -> AlertDialog(
+            onDismissRequest = {},
+            containerColor = Panel,
+            title = { Text("下载中", color = Ink) },
+            text = {
+                Text(
+                    if (update.total > 0) "${(update.done * 100 / update.total).toInt()}%（${update.done / 1024} / ${update.total / 1024} KB）"
+                    else "已下 ${update.done / 1024} KB",
+                    color = Ink
+                )
+            },
+            confirmButton = { TextButton(onClick = { session.dismissUpdate() }) { Text("后台下") } }
+        )
+        is UpdateState.Ready -> AlertDialog(
+            onDismissRequest = { session.dismissUpdate() },
+            containerColor = Panel,
+            title = { Text("下载完成", color = Ink) },
+            text = { Text("点安装调起系统安装器。覆盖安装要求签名一致；签不一致需先卸载旧版。", color = Ink, fontSize = 13.sp) },
+            confirmButton = { TextButton(onClick = { session.installUpdate() }) { Text("安装") } },
+            dismissButton = { TextButton(onClick = { session.dismissUpdate() }) { Text("稍后") } }
+        )
+        is UpdateState.Failed -> AlertDialog(
+            onDismissRequest = { session.dismissUpdate() },
+            containerColor = Panel,
+            title = { Text("更新失败", color = Ink) },
+            text = { Text(update.msg, color = Ink, fontSize = 13.sp) },
+            confirmButton = { TextButton(onClick = { session.dismissUpdate() }) { Text("知道了") } }
+        )
+        is UpdateState.UpToDate -> AlertDialog(
+            onDismissRequest = { session.dismissUpdate() },
+            containerColor = Panel,
+            title = { Text("已是最新", color = Ink) },
+            text = { Text("当前已是 GitHub 上的最新版本。", color = Ink, fontSize = 13.sp) },
+            confirmButton = { TextButton(onClick = { session.dismissUpdate() }) { Text("知道了") } }
+        )
+        UpdateState.Idle, UpdateState.Checking -> Unit
+    }
 }
 
 @Composable

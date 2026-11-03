@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +21,7 @@ import com.roomforge.core.CalMode
 import com.roomforge.core.RtaMode
 import com.roomforge.droid.Screen
 import com.roomforge.droid.UiSettings
+import com.roomforge.droid.UpdateState
 import androidx.compose.foundation.layout.padding
 import com.roomforge.droid.audio.Session
 
@@ -105,6 +108,20 @@ internal fun MenuSheet(session: Session, settings: UiSettings, actions: MenuActi
             MenuLine("文件", "") {
                 session.setScreen(Screen.FILES)
                 actions.onClose()
+            }
+            val update by session.update.collectAsState()
+            MenuLine(
+                "检查更新",
+                when (val u = update) {
+                    is UpdateState.Available -> u.info.version + " 可下"
+                    is UpdateState.Downloading -> "下载中"
+                    is UpdateState.Ready -> "可安装"
+                    is UpdateState.Checking -> "检查中"
+                    else -> ""
+                }
+            ) { session.checkUpdate(manual = true) }
+            MenuLine(if (settings.autoUpdate) "关闭自动检查更新" else "自动检查更新", "") {
+                session.edit { it.copy(autoUpdate = !it.autoUpdate) }
             }
             MenuLine("噪声校准", "粉噪 / 白噪", actions.onNoise)
             MenuLine("存储当前测量", "", actions.onStore)

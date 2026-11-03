@@ -53,6 +53,7 @@ data class UiSettings(
     val waterfall: Boolean = false,
     val leqDuration: Double = 60.0,
     val keepScreenOn: Boolean = true,
+    val autoUpdate: Boolean = true,
     val lockRotation: Boolean = false,
     val fontIndex: Int = 1,
     val calMode: CalMode = CalMode.SINGLE,
