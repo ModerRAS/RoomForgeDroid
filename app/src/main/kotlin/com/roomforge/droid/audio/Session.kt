@@ -182,6 +182,14 @@ class Session(private val context: Context) {
         mutate { it.copy(status = text) }
     }
 
+    /** 外来文件可能无权限或已损坏：读不出就报状态，不闪退。 */
+    private fun readFile(file: File): String? = try {
+        file.readText()
+    } catch (_: Exception) {
+        status("打不开 ${file.name}，可能没有权限或文件已损坏。")
+        null
+    }
+
     private fun mutate(block: (UiSettings) -> UiSettings): UiSettings = synchronized(settingsLock) {
         val next = block(settings.value)
         settings.value = next
@@ -384,7 +392,7 @@ class Session(private val context: Context) {
     }
 
     fun loadCalFile(file: File) {
-        importCal(file.name, file.readText())
+        importCal(file.name, readFile(file) ?: return)
     }
 
     fun saveTarget(name: String) {
@@ -394,7 +402,7 @@ class Session(private val context: Context) {
     }
 
     fun loadTarget(file: File) {
-        val levels = MeasurementFiles.readTarget(file.readText())
+        val levels = MeasurementFiles.readTarget(readFile(file) ?: return)
         edit { it.copy(target = levels.toList(), showTarget = true) }
         status("已加载目标曲线 ${file.name}")
     }
@@ -479,7 +487,7 @@ class Session(private val context: Context) {
     }
 
     fun loadNextSpectrum(file: File) {
-        val curve = MeasurementFiles.readSpectrum(file.readText())
+        val curve = MeasurementFiles.readSpectrum(readFile(file) ?: return)
         if (curve.size == 0) { status("文件里没有频谱"); return }
         if (loadedA == null) {
             loadedA = curve
@@ -506,23 +514,23 @@ class Session(private val context: Context) {
     }
 
     fun loadSwp(file: File) {
-        loadedSwp = MeasurementFiles.readSwp(file.readText())
+        loadedSwp = MeasurementFiles.readSwp(readFile(file) ?: return)
         edit { it.copy(loadedSwpName = file.name, overlayEpoch = it.overlayEpoch + 1, mode = RtaMode.PEAK_STORE) }
     }
 
     fun loadChart(file: File) {
-        loadedChart = MeasurementFiles.readChart(file.readText())
+        loadedChart = MeasurementFiles.readChart(readFile(file) ?: return)
         edit { it.copy(overlayEpoch = it.overlayEpoch + 1, mode = RtaMode.CHART) }
         status("已叠加载 ${file.name}（灰色，按文件自身时间）")
     }
 
     fun loadRt60(file: File) {
-        loadedRt60 = MeasurementFiles.readRt60(file.readText())
+        loadedRt60 = MeasurementFiles.readRt60(readFile(file) ?: return)
         edit { it.copy(overlayEpoch = it.overlayEpoch + 1, screen = Screen.RT60) }
     }
 
     fun loadLeq(file: File) {
-        loadedLeq = MeasurementFiles.readLeq(file.readText())
+        loadedLeq = MeasurementFiles.readLeq(readFile(file) ?: return)
         edit { it.copy(overlayEpoch = it.overlayEpoch + 1, mode = RtaMode.LEQ) }
         status("已读入 ${loadedLeq?.size ?: 0} 条 Leq")
     }
@@ -570,7 +578,13 @@ class Session(private val context: Context) {
     }
 
     fun selectWav(file: File) {
-        val pcm = MeasurementFiles.readWav(file.readBytes())
+        val bytes = try {
+            file.readBytes()
+        } catch (_: Exception) {
+            status("打不开 ${file.name}，可能没有权限或文件已损坏。")
+            return
+        }
+        val pcm = MeasurementFiles.readWav(bytes)
         if (pcm.sampleRate != settings.value.sampleRate) {
             status("WAV 采样率 ${pcm.sampleRate} 与分析器 ${settings.value.sampleRate} 不一致，不能播放。")
             return

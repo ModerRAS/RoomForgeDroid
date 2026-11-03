@@ -110,6 +110,7 @@ internal fun SpectrumPlot(session: Session, settings: UiSettings, frame: Display
     val ink = TextStyle(color = Ink, fontSize = 11.sp)
     Canvas(Modifier.fillMaxSize().plotGestures(session)) {
         drawRect(Bg)
+        if (size.width <= LEFT + 8f || size.height <= BOTTOM + 8f) return@Canvas // 首帧 0 尺寸时 drawText 负约束会闪退
         val plotW = (size.width - LEFT).coerceAtLeast(1f)
         val plotH = (size.height - BOTTOM).coerceAtLeast(1f)
         drawGrid(settings, plotW, plotH, measurer, style)
@@ -158,6 +159,7 @@ internal fun HeatPlot(session: Session, settings: UiSettings, buffer: SpecBuffer
     val style = TextStyle(color = Dim, fontSize = 10.sp)
     Canvas(Modifier.fillMaxSize().plotGestures(session)) {
         drawRect(Bg)
+        if (size.width <= LEFT + 8f || size.height <= BOTTOM + 8f) return@Canvas // 首帧 0 尺寸时 drawText 负约束会闪退
         paintHeat(pixels, buffer, settings.dbMin, settings.dbMax)
         bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
         val plotW = (size.width - LEFT).coerceAtLeast(1f)
@@ -190,6 +192,7 @@ internal fun ChartPlot(session: Session, settings: UiSettings, frame: DisplayFra
     val style = TextStyle(color = Dim, fontSize = 10.sp)
     Canvas(Modifier.fillMaxSize().plotGestures(session)) {
         drawRect(Bg)
+        if (size.width <= LEFT + 8f || size.height <= BOTTOM + 8f) return@Canvas // 首帧 0 尺寸时 drawText 负约束会闪退
         val plotW = (size.width - LEFT).coerceAtLeast(1f)
         val plotH = (size.height - BOTTOM).coerceAtLeast(1f)
         val chart = frame?.chart
@@ -278,7 +281,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGrid(
         if (f < settings.freqMin || f > settings.freqMax) continue
         val x = xOf(f, settings.freqMin, settings.freqMax, settings.freqLinear, LEFT, plotW)
         drawLine(Grid, Offset(x, 0f), Offset(x, plotH), 1f)
-        drawText(measurer, hzLabel(f), Offset(x + 2f, plotH + 2f), style)
+        val mark = hzLabel(f)
+        val markW = measurer.measure(mark, style).size.width.toFloat()
+        val lx = (x + 2f).coerceIn(0f, (size.width - markW - 1f).coerceAtLeast(0f))
+        drawText(measurer, mark, Offset(lx, plotH + 2f), style)
     }
 }
 
