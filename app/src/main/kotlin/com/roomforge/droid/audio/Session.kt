@@ -7,6 +7,7 @@ package com.roomforge.droid.audio
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -18,7 +19,10 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import com.roomforge.core.AnalysisPipeline
 import com.roomforge.core.CalibrationFiles
 import com.roomforge.core.ChartSample
@@ -39,7 +43,9 @@ import com.roomforge.core.SwpData
 import com.roomforge.core.TimeConstant
 import com.roomforge.core.Waveform
 import com.roomforge.core.Weighting
+import com.roomforge.droid.AppUpdate
 import com.roomforge.droid.LiveReadout
+import com.roomforge.droid.UpdateState
 import com.roomforge.droid.MicChoice
 import com.roomforge.droid.MicKind
 import com.roomforge.droid.Rt60Ui
@@ -189,6 +195,73 @@ class Session(private val context: Context) {
         status("打不开 ${file.name}，可能没有权限或文件已损坏。")
         null
     }
+
+    val update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+
+    fun autoCheckUpdate() {
+        if (settings.value.autoUpdate) checkUpdate(manual = false)
+    }
+
+    /** 自动只弹有更新；手动才报已是最新/失败。 */
+    fun checkUpdate(manual: Boolean) {
+        val cur = update.value
+        if (cur is UpdateState.Checking || cur is UpdateState.Downloading) return
+        update.value = UpdateState.Checking
+        Thread {
+            try {
+                val info = AppUpdate.check(currentVersion())
+                update.value = if (info == null) {
+                    if (manual) UpdateState.UpToDate else UpdateState.Idle
+                } else UpdateState.Available(info)
+            } catch (e: Exception) {
+                update.value = if (manual) UpdateState.Failed("检查更新失败：${e.message}") else UpdateState.Idle
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    fun downloadUpdate() {
+        val info = (update.value as? UpdateState.Available)?.info ?: return
+        update.value = UpdateState.Downloading(0, -1)
+        Thread {
+            try {
+                val dir = File(context.getExternalFilesDir(null), "updates").apply { mkdirs() }
+                val dest = File(dir, "roomforge-${info.tag}.apk")
+                AppUpdate.download(info.url, dest) { done, total ->
+                    update.value = UpdateState.Downloading(done, total)
+                }
+                update.value = UpdateState.Ready(dest)
+            } catch (e: Exception) {
+                update.value = UpdateState.Failed("下载失败：${e.message}")
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    fun installUpdate() {
+        val file = (update.value as? UpdateState.Ready)?.file ?: return
+        if (Build.VERSION.SDK_INT >= 26 && !context.packageManager.canRequestPackageInstalls()) {
+            runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + context.packageName))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            status("去打开“允许安装未知应用”，再回来点安装。")
+            return
+        }
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { context.startActivity(intent) }.isFailure) status("调不起安装器。")
+    }
+
+    fun dismissUpdate() {
+        update.value = UpdateState.Idle
+    }
+
+    private fun currentVersion(): String = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    }.getOrNull() ?: "0.0.0"
 
     private fun mutate(block: (UiSettings) -> UiSettings): UiSettings = synchronized(settingsLock) {
         val next = block(settings.value)
@@ -1068,6 +1141,7 @@ class Session(private val context: Context) {
             waterfall = prefs.getBoolean("waterfall", false),
             leqDuration = prefs.getFloat("leq", 60f).toDouble(),
             keepScreenOn = prefs.getBoolean("screen", true),
+            autoUpdate = prefs.getBoolean("autoUp", true),
             lockRotation = prefs.getBoolean("rotate", false),
             fontIndex = prefs.getInt("font", 1),
             calMode = runCatching { com.roomforge.core.CalMode.valueOf(prefs.getString("cal", "SINGLE")!!) }.getOrDefault(com.roomforge.core.CalMode.SINGLE),
@@ -1125,6 +1199,7 @@ class Session(private val context: Context) {
             .putBoolean("waterfall", s.waterfall)
             .putFloat("leq", s.leqDuration.toFloat())
             .putBoolean("screen", s.keepScreenOn)
+            .putBoolean("autoUp", s.autoUpdate)
             .putBoolean("rotate", s.lockRotation)
             .putInt("font", s.fontIndex)
             .putString("cal", s.calMode.name)

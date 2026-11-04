@@ -48,6 +48,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.roomforge.core.RtaMode
+import com.roomforge.droid.UpdateState
 import com.roomforge.droid.ui.AnalyzerScreen
 import com.roomforge.droid.ui.Bg
 import com.roomforge.droid.ui.CalScreen
@@ -66,6 +67,7 @@ import com.roomforge.droid.ui.Panel
 import com.roomforge.droid.ui.RoomForgeTheme
 import com.roomforge.droid.ui.Rt60Screen
 import com.roomforge.droid.ui.TargetScreen
+import com.roomforge.droid.ui.UpdateDialog
 import androidx.compose.runtime.collectAsState
 import java.io.File
 import java.text.SimpleDateFormat
@@ -105,6 +107,7 @@ private fun RoomForgeApp(session: com.roomforge.droid.audio.Session) {
     val live by session.live.collectAsState()
     val rt60 by session.rt60Ui.collectAsState()
     val recordReady by session.recordReady.collectAsState()
+    val update by session.update.collectAsState()
     var menu by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     var askedMic by remember { mutableStateOf(false) }
@@ -143,7 +146,7 @@ private fun RoomForgeApp(session: com.roomforge.droid.audio.Session) {
             micLauncher.launch(Manifest.permission.RECORD_AUDIO)
         } else session.start(false)
     }
-    LaunchedEffect(Unit) { ensureAudio() }
+    LaunchedEffect(Unit) { ensureAudio(); session.autoCheckUpdate() }
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, event ->
             when (event) {
@@ -252,6 +255,8 @@ private fun RoomForgeApp(session: com.roomforge.droid.audio.Session) {
             onDiscard = { session.discardPending() }
         )
     }
+
+    UpdateDialog(update, session)
 
     when (dialog) {
         Dialog.FREQ -> NumberDialog(
@@ -465,5 +470,6 @@ Sone 用 ISO 226:2003 等响度，再套手册里的 HVI 组合：0.7×(1 kHz) +
 · 禁止旋转使用 Activity 方向锁，自由窗口或桌面模式可能不生效。
 · 分享走 ACTION_SEND，导出走系统文件选择器，没有网盘 SDK。
 · WAV 最长约 30 秒。Leq 历史最多 5000 条。记录图最多约 10000 点。
+· 启动时检查一次 GitHub releases 有无新版（菜单里可关掉自动检查），下载和安装只在你确认后发生。
 
 粉噪在 1/3 RTA 上应接近平直。白噪在倍频程上约 +3 dB/oct，在原始 FFT 上接近平直。"""

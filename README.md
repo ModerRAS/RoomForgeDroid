@@ -1,6 +1,8 @@
 # RoomForgeDroid
 
-RoomForge 是一个离线房间声学分析仪。它在 Android 上提供实时频谱（RTA）、声级、Leq、记录图、峰值存储、信号发生器、RT60、极性检测，以及和 AudioTool 公开列格式兼容的测量文件。
+RoomForge 是一个房间声学分析仪。它在 Android 上提供实时频谱（RTA）、声级、Leq、记录图、峰值存储、信号发生器、RT60、极性检测，以及和 AudioTool 公开列格式兼容的测量文件。
+
+测量本身完全离线。应用会在启动时检查一次 GitHub releases 有没有新版（可在菜单里关掉），下载和安装只在你点了之后才发生。
 
 界面和名称是 RoomForge 自己的。本应用不是 AudioTool，也不使用它的商标或图标。文件目录仍叫 `AudioTool`，因为现有的频谱转换工具按这个目录名找 `.at` 文件。
 
@@ -41,6 +43,13 @@ export ANDROID_HOME="$HOME/android-sdk"   # 或写入 local.properties 的 sdk.d
 `local.properties` 不入库。核心算法在 `:core`，不依赖 Android，可以用 JVM 测试。`:app` 是 Jetpack Compose。Debug APK 在 `app/build/outputs/apk/debug/`。
 
 本仓库没有模拟器。验收是 `:core:test` 与 `:app:assembleDebug`。真机上的点击路径需要在设备上再看一遍。
+
+## 发版
+
+1. 先在仓库 Settings > Secrets and variables > Actions 里加四个签名 secrets：`ANDROID_KEYSTORE_BASE64`（keystore 文件 base64）、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`、`ANDROID_STORE_PASSWORD`。
+2. 升 `app/build.gradle.kts` 里的 `versionName` / `versionCode`。
+3. 打 tag 并推送：`git tag vX.Y.Z && git push origin vX.Y.Z`。CI 会跑测试、编 release 包、签名并创建 GitHub Release（带 APK）。
+4. 应用内更新：启动时自动查一次 GitHub releases，有新版弹框提示；菜单里也能手动“检查更新”，可关闭自动检查。注意覆盖安装要求签名一致：之前装的是 debug 包的话，第一次需卸载重装。
 
 ## 系统做不到的部分
 
